@@ -1,0 +1,7 @@
+project(BattleCity)
+cmake_minimum_required(VERSION 2.8)
+aux_source_directory(. SRC_LIST)
+add_subdirectory(${PROJECT_SOURCE_DIR}/deps/glfw)
+include_directories(${PROJECT_SOURCE_DIR}/deps/glfw/include)
+add_executable(${PROJECT_NAME} ${SRC_LIST})
+target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES})
