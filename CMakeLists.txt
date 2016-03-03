@@ -10,6 +10,9 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/deps/glfw)
 include_directories(${PROJECT_SOURCE_DIR}/deps/glfw/include)
 target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES})
 
+add_subdirectory(${PROJECT_SOURCE_DIR}/deps/glm)
+include_directories(${PROJECT_SOURCE_DIR}/deps/glm)
+
 set(CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/deps/glew/out")
 find_package(GLEW REQUIRED)
 if (GLEW_FOUND)

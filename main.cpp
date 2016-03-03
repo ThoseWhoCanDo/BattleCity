@@ -3,6 +3,7 @@
 // GLEW
 #define GLEW_STATIC
 #include <GL/glew.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 // GLFW
 #include <GLFW/glfw3.h>
@@ -10,9 +11,12 @@
 
 // Function prototypes
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+void window_size_callback(GLFWwindow* window, int width, int height);
 
-// Window dimensions
-const GLuint WIDTH = 800, HEIGHT = 600;
+struct WindowState {
+    GLuint width = 800;
+    GLuint height = 600;
+} window_state;
 
 // Shaders
 const GLchar* vertexShaderSource = "#version 330 core\n"
@@ -41,10 +45,10 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
     // Create a GLFWwindow object that we can use for GLFW's functions
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "LearnOpenGL", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(window_state.width, window_state.height, "LearnOpenGL", nullptr, nullptr);
+    glfwSetWindowSizeCallback(window, window_size_callback);
     glfwMakeContextCurrent(window);
 
     // Set the required callback functions
@@ -56,8 +60,9 @@ int main()
     glewInit();
 
     // Define the viewport dimensions
-    glViewport(0, 0, WIDTH, HEIGHT);
+    glViewport(0, 0, window_state.width, window_state.height);
 
+    //glm::mat4x4 ortho = glm::ortho()
 
     // Build and compile our shader program
     // Vertex shader
@@ -158,4 +163,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GL_TRUE);
+}
+
+void window_size_callback(GLFWwindow* window, int width, int height)
+{
+    window_state.width = width;
+    window_state.height = height;
+    glViewport(0, 0, window_state.width, window_state.height);
 }
