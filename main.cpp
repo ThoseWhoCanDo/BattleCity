@@ -4,6 +4,7 @@
 #define GLEW_STATIC
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 // GLFW
 #include <GLFW/glfw3.h>
@@ -22,10 +23,11 @@ struct WindowState {
 const GLchar* vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 position;\n"
     "layout (location = 1) in vec3 color;\n"
+    "uniform mat4 viewMatrix;\n"
     "out vec3 ourColor;\n"
     "void main()\n"
     "{\n"
-    "gl_Position = vec4(position, 1.0);\n"
+    "gl_Position = viewMatrix * vec4(position, 1.0);\n"
     "ourColor = color;\n"
     "}\0";
 const GLchar* fragmentShaderSource = "#version 330 core\n"
@@ -61,8 +63,6 @@ int main()
 
     // Define the viewport dimensions
     glViewport(0, 0, window_state.width, window_state.height);
-
-    //glm::mat4x4 ortho = glm::ortho()
 
     // Build and compile our shader program
     // Vertex shader
@@ -141,6 +141,10 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
+        float ratio = static_cast<float>(window_state.width) / window_state.height;
+        glm::mat4x4 ortho = glm::ortho(-ratio, ratio, -1.0f, 1.0f);
+        GLint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
+        glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(ortho));
         // Draw the triangle
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO);
