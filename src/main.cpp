@@ -1,12 +1,11 @@
 #include <iostream>
 
-// GLEW
 #define GLEW_STATIC
 #include <GL/glew.h>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-// GLFW
 #include <GLFW/glfw3.h>
 
 
@@ -37,6 +36,25 @@ const GLchar* fragmentShaderSource = "#version 330 core\n"
     "{\n"
     "color = vec4(ourColor, 1.0f);\n"
     "}\n\0";
+
+/**
+ * @brief computeOrthoMatrix creates an orthographic projection matrix for 2D rendering
+ *
+ * The function takes the aspect ratio into account, such that content fits all window
+ * configurations, such as narrow and tall, or wide and thin
+ * @param width the width of the window
+ * @param height the height of the window, must be greater than 1
+ * @return a glm::mat4x4 matrix object that describes the orthographic projection transformation
+ */
+glm::mat4x4 computeOrthoMatrix(int width, int height)
+{
+    assert(height > 0);
+    float ratio = static_cast<float>(width) / height;
+    if (ratio > 1.0) {
+        return glm::ortho(-ratio, ratio, -1.0f, 1.0f);
+    }
+    return glm::ortho(-1.0f, 1.0f, -1/ratio, 1/ratio);
+}
 
 // The MAIN function, from here we start the application and run the game loop
 int main()
@@ -141,8 +159,7 @@ int main()
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        float ratio = static_cast<float>(window_state.width) / window_state.height;
-        glm::mat4x4 ortho = glm::ortho(-ratio, ratio, -1.0f, 1.0f);
+        glm::mat4x4 ortho = computeOrthoMatrix(window_state.width, window_state.height);
         GLint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(ortho));
         // Draw the triangle
@@ -172,6 +189,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
     window_state.width = width;
-    window_state.height = height;
+    window_state.height = height > 0 ? height : 1;
     glViewport(0, 0, window_state.width, window_state.height);
 }

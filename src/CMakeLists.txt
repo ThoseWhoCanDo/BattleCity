@@ -1,0 +1,9 @@
+set(SOURCE_FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/game/map.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    PARENT_SCOPE)
+
+set(HEADER_DIRS
+        ${CMAKE_CURRENT_SOURCE_DIR}
+    PARENT_SCOPE
+)
