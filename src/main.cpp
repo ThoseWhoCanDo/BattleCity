@@ -1,4 +1,6 @@
 #include <iostream>
+#include <vector>
+#include <memory>
 
 #define GLEW_STATIC
 #include <GL/glew.h>
@@ -7,6 +9,8 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <GLFW/glfw3.h>
+
+#include <game/map.h>
 
 
 // Function prototypes
@@ -56,6 +60,113 @@ glm::mat4x4 computeOrthoMatrix(int width, int height)
     return glm::ortho(-1.0f, 1.0f, -1/ratio, 1/ratio);
 }
 
+class Shader {
+public:
+    enum ShaderType {
+        Vertex = GL_VERTEX_SHADER,
+        Fragment = GL_FRAGMENT_SHADER
+    };
+
+    virtual ~Shader() {
+        if (shader_ != 0) {
+            glDeleteShader(shader_);
+        }
+    }
+
+    GLuint gl_ref() const {
+        return shader_;
+    }
+
+protected:
+    Shader(ShaderType shader_type, const GLchar* shader_source_): shader_(0)
+    {
+        shader_source_ = shader_source_;
+        shader_type_ = shader_type;
+
+        std::cout << "creating shader" << shader_type << std::endl;
+
+        shader_ = glCreateShader(shader_type_);
+        glShaderSource(shader_, 1, &shader_source_, NULL);
+        glCompileShader(shader_);
+        GLint success;
+        GLchar info_log[512];
+        glGetShaderiv(shader_, GL_COMPILE_STATUS, &success);
+        if (!success)
+        {
+            glGetShaderInfoLog(shader_, 512, NULL, info_log);
+            std::cout << "ERROR::SHADER::" << shader_type_ << "::COMPILATION_FAILED\n" << info_log << std::endl;
+        }
+    }
+
+private:
+    ShaderType shader_type_;
+    const GLchar *shader_source_;
+    GLuint shader_;
+};
+
+class VertexShader: public Shader {
+public:
+    VertexShader(const GLchar* shader_source)
+        :Shader(ShaderType::Vertex, shader_source)
+    {
+    }
+};
+
+class FragmentShader: public Shader {
+public:
+    FragmentShader(const GLchar* shader_source)
+        :Shader(ShaderType::Fragment, shader_source)
+    {
+    }
+};
+
+class Program {
+public:
+    Program(const std::vector<Shader*> &shaders)
+        : shaders_(shaders), program_(0)
+    {
+        // Link shaders
+        program_ = glCreateProgram();
+        for (auto it=shaders.begin(); it != shaders.end(); it++) {
+            glAttachShader(program_, (*it)->gl_ref());
+        }
+        glLinkProgram(program_);
+        // Check for linking errors
+        GLint success;
+        GLchar info_log[512];
+        glGetProgramiv(program_, GL_LINK_STATUS, &success);
+        if (!success) {
+            glGetProgramInfoLog(program_, 512, NULL, info_log);
+            std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << info_log << std::endl;
+        }
+    }
+
+    GLuint gl_ref()
+    {
+        return program_;
+    }
+
+    virtual ~Program()
+    {
+        if (program_ != 0) {
+            glDeleteProgram(program_);
+        }
+    }
+
+private:
+    const std::vector<Shader*> &shaders_;
+    GLuint program_;
+};
+
+class MapRenderer {
+public:
+    MapRenderer(const game::Map &map) {
+    }
+
+private:
+    std::vector<GLfloat> vertexData_;
+};
+
 // The MAIN function, from here we start the application and run the game loop
 int main()
 {
@@ -82,45 +193,9 @@ int main()
     // Define the viewport dimensions
     glViewport(0, 0, window_state.width, window_state.height);
 
-    // Build and compile our shader program
-    // Vertex shader
-    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-    // Check for compile time errors
-    GLint success;
-    GLchar infoLog[512];
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
-    }
-    // Fragment shader
-    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-    // Check for compile time errors
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success)
-    {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
-    }
-    // Link shaders
-    GLuint shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-    // Check for linking errors
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
-        std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
-    }
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
-
+    VertexShader vertex_shader(vertexShaderSource);
+    FragmentShader fragment_shader(fragmentShaderSource);
+    Program shader_program({&vertex_shader, &fragment_shader});
 
     // Set up vertex data (and buffer(s)) and attribute pointers
     GLfloat vertices[] = {
@@ -129,6 +204,8 @@ int main()
         -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // Bottom Left
          0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // Top
     };
+    game::Map map(10);
+    MapRenderer renderer(map);
     GLuint VBO, VAO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -160,10 +237,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         glm::mat4x4 ortho = computeOrthoMatrix(window_state.width, window_state.height);
-        GLint viewMatrixLocation = glGetUniformLocation(shaderProgram, "viewMatrix");
+        GLint viewMatrixLocation = glGetUniformLocation(shader_program.gl_ref(), "viewMatrix");
         glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(ortho));
         // Draw the triangle
-        glUseProgram(shaderProgram);
+        glUseProgram(shader_program.gl_ref());
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         glBindVertexArray(0);
