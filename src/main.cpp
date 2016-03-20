@@ -25,20 +25,16 @@ struct WindowState {
 // Shaders
 const GLchar* vertexShaderSource = "#version 330 core\n"
     "layout (location = 0) in vec3 position;\n"
-    "layout (location = 1) in vec3 color;\n"
     "uniform mat4 viewMatrix;\n"
-    "out vec3 ourColor;\n"
     "void main()\n"
     "{\n"
     "gl_Position = viewMatrix * vec4(position, 1.0);\n"
-    "ourColor = color;\n"
     "}\0";
 const GLchar* fragmentShaderSource = "#version 330 core\n"
-    "in vec3 ourColor;\n"
     "out vec4 color;\n"
     "void main()\n"
     "{\n"
-    "color = vec4(ourColor, 1.0f);\n"
+    "color = vec4(0.0f, 1.0f, 0.0f, 1.0f);\n"
     "}\n\0";
 
 /**
@@ -60,6 +56,7 @@ glm::mat4x4 computeOrthoMatrix(int width, int height)
     return glm::ortho(-1.0f, 1.0f, -1/ratio, 1/ratio);
 }
 
+
 class Shader {
 public:
     enum ShaderType {
@@ -67,23 +64,25 @@ public:
         Fragment = GL_FRAGMENT_SHADER
     };
 
-    virtual ~Shader() {
+    virtual ~Shader()
+    {
         if (shader_ != 0) {
             glDeleteShader(shader_);
         }
     }
 
-    GLuint gl_ref() const {
+    GLuint gl_ref() const
+    {
         return shader_;
     }
 
 protected:
-    Shader(ShaderType shader_type, const GLchar* shader_source_): shader_(0)
+    Shader(ShaderType shaderType, const GLchar* shaderSource): shader_(0)
     {
-        shader_source_ = shader_source_;
-        shader_type_ = shader_type;
+        shader_source_ = shaderSource;
+        shader_type_ = shaderType;
 
-        std::cout << "creating shader" << shader_type << std::endl;
+        std::cout << "creating shader" << shaderType << std::endl;
 
         shader_ = glCreateShader(shader_type_);
         glShaderSource(shader_, 1, &shader_source_, NULL);
@@ -104,26 +103,30 @@ private:
     GLuint shader_;
 };
 
+
 class VertexShader: public Shader {
 public:
-    VertexShader(const GLchar* shader_source)
-        :Shader(ShaderType::Vertex, shader_source)
+    VertexShader(const GLchar* shaderSource)
+        :Shader(ShaderType::Vertex, shaderSource)
     {
     }
 };
 
+
 class FragmentShader: public Shader {
 public:
-    FragmentShader(const GLchar* shader_source)
-        :Shader(ShaderType::Fragment, shader_source)
+    FragmentShader(const GLchar* shaderSource)
+        :Shader(ShaderType::Fragment, shaderSource)
     {
     }
 };
+
 
 class Program {
 public:
     Program(const std::vector<Shader*> &shaders)
-        : shaders_(shaders), program_(0)
+        : shaders_(shaders),
+          program_(0)
     {
         // Link shaders
         program_ = glCreateProgram();
@@ -154,109 +157,119 @@ public:
     }
 
 private:
-    const std::vector<Shader*> &shaders_;
+    std::vector<Shader*> shaders_;
     GLuint program_;
 };
 
+
 class MapRenderer {
 public:
-    MapRenderer(const game::Map &map) {
+    MapRenderer(const game::Map &map, glm::mat4x4 &ortho)
+        : map_(map),
+          ortho_(ortho),
+          vertexShader_(vertexShaderSource),
+          fragmentShader_(fragmentShaderSource),
+          program_({&vertexShader_, &fragmentShader_})
+    {
+        glGenVertexArrays(1, &cellVao_);
+        glGenBuffers(1, &cellVbo_);
+        glBindVertexArray(cellVao_);
+
+        glBindBuffer(GL_ARRAY_BUFFER, cellVbo_);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+    }
+
+    void render()
+    {
+        GLint viewMatrixLocation = glGetUniformLocation(program_.gl_ref(), "viewMatrix");
+        glUseProgram(program_.gl_ref());
+        glBindVertexArray(cellVao_);
+        for (int i=0; i<map_.row_count(); ++i) {
+            for (int j=0; j<map_.col_count(); ++j) {
+                glm::mat4 cellTranslate = glm::translate(glm::mat4(1.0f),
+                                                         glm::vec3((j - (map_.col_count()-1)/2.0)*2,
+                                                                   (i - (map_.row_count()-1)/2.0)*2,
+                                                                   0));
+                float scaleFactor = 1.0f / map_.row_count();
+                glm::mat4 gridScale = glm::scale(glm::mat4(1.0f), glm::vec3(scaleFactor, scaleFactor, scaleFactor));
+                glm::mat4 viewMatrix = ortho_ * gridScale * cellTranslate;
+                glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(viewMatrix));
+                glDrawArrays(GL_TRIANGLES, 0, 6);
+            }
+        }
+        glBindVertexArray(0);
+    }
+
+    ~MapRenderer()
+    {
+        glDeleteVertexArrays(1, &cellVao_);
+        glDeleteBuffers(1, &cellVbo_);
     }
 
 private:
-    std::vector<GLfloat> vertexData_;
+    GLfloat vertices[18] = {
+        -1.0f, 1.0f, 0.0f,
+        -1.0f, -1.0f, 0.0f,
+        1.0f, -0.5f, 0.0f,
+        1.0f, -1.0f, 0.0f,
+        1.0f, 1.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f
+    };
+
+    VertexShader vertexShader_;
+    FragmentShader fragmentShader_;
+    Program program_;
+    GLuint cellVbo_;
+    GLuint cellVao_;
+    glm::mat4x4 &ortho_;
+
+    const game::Map map_;
 };
 
-// The MAIN function, from here we start the application and run the game loop
+
 int main()
 {
-    // Init GLFW
     glfwInit();
-    // Set all the required options for GLFW
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Create a GLFWwindow object that we can use for GLFW's functions
     GLFWwindow* window = glfwCreateWindow(window_state.width, window_state.height, "LearnOpenGL", nullptr, nullptr);
     glfwSetWindowSizeCallback(window, window_size_callback);
     glfwMakeContextCurrent(window);
 
-    // Set the required callback functions
     glfwSetKeyCallback(window, key_callback);
 
-    // Set this to true so GLEW knows to use a modern approach to retrieving function pointers and extensions
     glewExperimental = GL_TRUE;
-    // Initialize GLEW to setup the OpenGL Function pointers
     glewInit();
 
-    // Define the viewport dimensions
     glViewport(0, 0, window_state.width, window_state.height);
 
-    VertexShader vertex_shader(vertexShaderSource);
-    FragmentShader fragment_shader(fragmentShaderSource);
-    Program shader_program({&vertex_shader, &fragment_shader});
-
-    // Set up vertex data (and buffer(s)) and attribute pointers
-    GLfloat vertices[] = {
-        // Positions         // Colors
-         0.5f, -0.5f, 0.0f,  1.0f, 0.0f, 0.0f,  // Bottom Right
-        -0.5f, -0.5f, 0.0f,  0.0f, 1.0f, 0.0f,  // Bottom Left
-         0.0f,  0.5f, 0.0f,  0.0f, 0.0f, 1.0f   // Top
-    };
     game::Map map(10);
-    MapRenderer renderer(map);
-    GLuint VBO, VAO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    // Bind the Vertex Array Object first, then bind and set vertex buffer(s) and attribute pointer(s).
-    glBindVertexArray(VAO);
+    glm::mat4x4 ortho;
+    MapRenderer renderer(map, ortho);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-    // Position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
-    // Color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
-    glEnableVertexAttribArray(1);
-
-    glBindVertexArray(0); // Unbind VAO
-
-
-    // Game loop
     while (!glfwWindowShouldClose(window))
     {
-        // Check if any events have been activiated (key pressed, mouse moved etc.) and call corresponding response functions
         glfwPollEvents();
 
-        // Render
-        // Clear the colorbuffer
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glm::mat4x4 ortho = computeOrthoMatrix(window_state.width, window_state.height);
-        GLint viewMatrixLocation = glGetUniformLocation(shader_program.gl_ref(), "viewMatrix");
-        glUniformMatrix4fv(viewMatrixLocation, 1, GL_FALSE, glm::value_ptr(ortho));
-        // Draw the triangle
-        glUseProgram(shader_program.gl_ref());
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glBindVertexArray(0);
+        ortho = computeOrthoMatrix(window_state.width, window_state.height);
+        renderer.render();
 
-        // Swap the screen buffers
         glfwSwapBuffers(window);
     }
-    // Properly de-allocate all resources once they've outlived their purpose
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
-    // Terminate GLFW, clearing any resources allocated by GLFW.
     glfwTerminate();
     return 0;
 }
 
-// Is called whenever a key is pressed/released via GLFW
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)

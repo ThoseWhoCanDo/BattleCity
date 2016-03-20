@@ -18,6 +18,17 @@ namespace game {
         };
 
         Map(int size);
+
+        CellType cell(int row, int col) {
+            return data_[row][col];
+        }
+
+        int row_count() const {
+            return data_.size();
+        }
+        int col_count() const {
+            return data_[0].size();
+        }
     private:
         typedef std::vector<CellType> MapRowType;
         typedef std::vector<MapRowType> MapDataType;
